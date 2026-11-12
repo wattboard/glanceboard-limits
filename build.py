@@ -169,6 +169,7 @@ def main():
         shutil.rmtree(out)
     cover = set()
     total = 0
+    built = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
     for (x, y), entries in tiles.items():
         enc = []
         for limit, run in entries:
@@ -188,9 +189,10 @@ def main():
         shift = Z - COVER_Z
         cover.add(f"{x >> shift}/{y >> shift}")
     with open(os.path.join(out, "coverage.json"), "w") as f:
-        json.dump({"z": COVER_Z, "t": sorted(cover)}, f, separators=(",", ":"))
+        # "b": build date; the app drops its saved tiles when it changes.
+        json.dump({"z": COVER_Z, "b": built, "t": sorted(cover)}, f, separators=(",", ":"))
     with open(os.path.join(out, "meta.json"), "w") as f:
-        json.dump({"v": 1, "z": Z, "built": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}, f)
+        json.dump({"v": 1, "z": Z, "built": built}, f)
     shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), out)
     print(f"{ways} ways ({inferred} with the urban default), {len(tiles)} tiles, {total / 1e6:.1f} MB, {len(cover)} coverage areas")
 
