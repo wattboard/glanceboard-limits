@@ -1,0 +1,4 @@
+# Geofabrik extracts (path without -latest.osm.pbf). Add more here.
+europe/spain
+europe/portugal
+europe/andorra
