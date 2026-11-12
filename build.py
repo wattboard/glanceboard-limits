@@ -74,6 +74,36 @@ def limit_of(tags):
     return None
 
 
+# Country of each extract (file name), for the legal default on urban streets with no limit tagged.
+COUNTRIES = {"spain": "ES", "portugal": "PT", "andorra": "AD"}
+
+
+def lanes_each_way(tags):
+    try:
+        lanes = int(str(tags.get("lanes", "")).split(";")[0])
+    except ValueError:
+        return 1
+    return lanes if tags.get("oneway") in ("yes", "1", "-1") else lanes // 2
+
+
+def default_limit(tags, country):
+    """The general limit of an urban street that has none tagged (most residential streets in OSM).
+
+    Spain (since 2021): 20 on single-level streets, 30 with one lane each way, 50 with two or more.
+    Portugal: 50 in towns, 20 in shared zones. Other roads are left out: they may be rural.
+    """
+    road = tags.get("highway")
+    if road == "living_street":
+        return 20 if country in ("ES", "PT") else None
+    if road != "residential":
+        return None
+    if country == "ES":
+        return 50 if lanes_each_way(tags) >= 2 else 30
+    if country == "PT":
+        return 50
+    return None
+
+
 def tile(lat, lon, z=Z):
     n = 1 << z
     lat = max(min(lat, 85.0511), -85.0511)
@@ -95,7 +125,9 @@ def main():
     out = sys.argv[1]
     tiles = defaultdict(list)   # (x, y) -> list of [kmh, points]
     ways = 0
+    inferred = 0
     for path in sys.argv[2:]:
+        country = COUNTRIES.get(os.path.basename(path).split(".")[0])
         with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip().lstrip("\x1e")
@@ -110,7 +142,10 @@ def main():
                     continue
                 limit = limit_of(tags)
                 if not limit:
-                    continue
+                    limit = default_limit(tags, country)
+                    if not limit:
+                        continue
+                    inferred += 1
                 pts = [(round(lat, 5), round(lon, 5)) for lon, lat in geom["coordinates"]]
                 if len(pts) < 2:
                     continue
@@ -157,7 +192,7 @@ def main():
     with open(os.path.join(out, "meta.json"), "w") as f:
         json.dump({"v": 1, "z": Z, "built": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}, f)
     shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), out)
-    print(f"{ways} ways, {len(tiles)} tiles, {total / 1e6:.1f} MB, {len(cover)} coverage areas")
+    print(f"{ways} ways ({inferred} with the urban default), {len(tiles)} tiles, {total / 1e6:.1f} MB, {len(cover)} coverage areas")
 
 
 if __name__ == "__main__":

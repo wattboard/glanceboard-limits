@@ -7,7 +7,7 @@ for c in $(grep -v '^#' countries.txt); do
   [ -f "work/$name.osm.pbf" ] || curl -sfL -o "work/$name.osm.pbf" "https://download.geofabrik.de/$c-latest.osm.pbf"
   osmium tags-filter -O -o "work/$name-hw.osm.pbf" "work/$name.osm.pbf" w/highway
   osmium tags-filter -O -o "work/$name-limits.osm.pbf" "work/$name-hw.osm.pbf" \
-    w/maxspeed w/maxspeed:type w/source:maxspeed w/zone:maxspeed
+    w/maxspeed w/maxspeed:type w/source:maxspeed w/zone:maxspeed w/highway=residential,living_street
   osmium export -O -f geojsonseq --geometry-types=linestring \
     -o "work/$name.geojsonseq" "work/$name-limits.osm.pbf"
 done
