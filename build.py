@@ -3,10 +3,11 @@
 
 Input: GeoJSON sequences of road ways (osmium export of the extracts, see build.sh).
 Output (in ./site):
-  13/<x>/<y>.json  one file per zoom-13 tile with roads that have a limit:
-                   {"w": [[kmh, lat, lon, dlat, dlon, ...], ...]}
-                   coordinates in 1e-5 degrees (about 1 m), each point after the first as a
-                   difference from the one before.
+  13/<x>/<y>.json  one file per zoom-13 tile with roads that have a limit and fixed speed cameras:
+                   {"w": [[kmh, lat, lon, dlat, dlon, ...], ...], "c": [[lat, lon, kmh, dir], ...]}
+                   coordinates in 1e-5 degrees (about 1 m), each road point after the first as a
+                   difference from the one before. Cameras: kmh 0 = not tagged, dir = degrees the
+                   camera faces traffic from (-1 = not tagged). "c" is left out when there are none.
   coverage.json    {"z": 9, "t": ["x/y", ...]}: zoom-11 areas built. Inside them a missing
                    tile means "no limits known here"; outside, the app asks another source.
   meta.json        when the data was built.
@@ -104,6 +105,45 @@ def default_limit(tags, country):
     return None
 
 
+COMPASS = {"N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157,
+           "S": 180, "SSW": 202, "SW": 225, "WSW": 247, "W": 270, "WNW": 292, "NW": 315, "NNW": 337}
+
+
+def direction(raw):
+    """Degrees 0-359 from an OSM direction tag ("90", "NE", "90;270" keeps the first), or -1."""
+    if not raw:
+        return -1
+    tag = str(raw).split(";")[0].strip().upper()
+    if tag in COMPASS:
+        return COMPASS[tag]
+    try:
+        return int(float(tag)) % 360
+    except ValueError:
+        return -1
+
+
+def read_cameras(path, cameras):
+    """Adds the speed cameras of one export to cameras[(x, y)]."""
+    count = 0
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip().lstrip("\x1e")
+            if not line:
+                continue
+            feature = json.loads(line)
+            geom = feature.get("geometry") or {}
+            if geom.get("type") != "Point":
+                continue
+            tags = feature.get("properties") or {}
+            if tags.get("highway") != "speed_camera":
+                continue
+            lon, lat = geom["coordinates"]
+            cameras[tile(lat, lon)].append([int(round(lat * 1e5)), int(round(lon * 1e5)),
+                                            kmh(tags.get("maxspeed")) or 0, direction(tags.get("direction"))])
+            count += 1
+    return count
+
+
 def tile(lat, lon, z=Z):
     n = 1 << z
     lat = max(min(lat, 85.0511), -85.0511)
@@ -124,9 +164,14 @@ def segment_tiles(a, b):
 def main():
     out = sys.argv[1]
     tiles = defaultdict(list)   # (x, y) -> list of [kmh, points]
+    cameras = defaultdict(list)  # (x, y) -> list of [lat, lon, kmh, dir]
     ways = 0
     inferred = 0
+    camera_count = 0
     for path in sys.argv[2:]:
+        if os.path.basename(path).endswith("-cameras.geojsonseq"):
+            camera_count += read_cameras(path, cameras)
+            continue
         country = COUNTRIES.get(os.path.basename(path).split(".")[0])
         with open(path, encoding="utf-8") as f:
             for line in f:
@@ -170,7 +215,8 @@ def main():
     cover = set()
     total = 0
     built = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
-    for (x, y), entries in tiles.items():
+    for (x, y) in set(tiles) | set(cameras):
+        entries = tiles.get((x, y), [])
         enc = []
         for limit, run in entries:
             row = [limit, int(round(run[0][0] * 1e5)), int(round(run[0][1] * 1e5))]
@@ -182,7 +228,10 @@ def main():
             enc.append(row)
         d = os.path.join(out, str(Z), str(x))
         os.makedirs(d, exist_ok=True)
-        data = json.dumps({"w": enc}, separators=(",", ":"))
+        body = {"w": enc}
+        if cameras.get((x, y)):
+            body["c"] = cameras[(x, y)]
+        data = json.dumps(body, separators=(",", ":"))
         total += len(data)
         with open(os.path.join(d, f"{y}.json"), "w") as f:
             f.write(data)
@@ -194,7 +243,7 @@ def main():
     with open(os.path.join(out, "meta.json"), "w") as f:
         json.dump({"v": 1, "z": Z, "built": built}, f)
     shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), out)
-    print(f"{ways} ways ({inferred} with the urban default), {len(tiles)} tiles, {total / 1e6:.1f} MB, {len(cover)} coverage areas")
+    print(f"{ways} ways ({inferred} with the urban default), {camera_count} cameras, {len(set(tiles) | set(cameras))} tiles, {total / 1e6:.1f} MB, {len(cover)} coverage areas")
 
 
 if __name__ == "__main__":

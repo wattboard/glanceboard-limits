@@ -10,5 +10,9 @@ for c in $(grep -v '^#' countries.txt); do
     w/maxspeed w/maxspeed:type w/source:maxspeed w/zone:maxspeed w/highway=residential,living_street
   osmium export -O -f geojsonseq --geometry-types=linestring \
     -o "work/$name.geojsonseq" "work/$name-limits.osm.pbf"
+  # Fixed speed cameras (nodes), for the app's camera warnings.
+  osmium tags-filter -O -o "work/$name-cameras.osm.pbf" "work/$name.osm.pbf" n/highway=speed_camera
+  osmium export -O -f geojsonseq --geometry-types=point \
+    -o "work/$name-cameras.geojsonseq" "work/$name-cameras.osm.pbf"
 done
 python3 build.py site work/*.geojsonseq
