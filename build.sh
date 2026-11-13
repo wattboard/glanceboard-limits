@@ -15,4 +15,7 @@ for c in $(grep -v '^#' countries.txt); do
   osmium export -O -f geojsonseq --geometry-types=point \
     -o "work/$name-cameras.geojsonseq" "work/$name-cameras.osm.pbf"
 done
-python3 build.py site work/*.geojsonseq
+# Official fixed cameras and average-speed sections from the DGT (open data, CC BY, Spain except
+# the Basque Country and Catalonia). Optional: the build goes on without it.
+curl -sfL -m 120 -o work/dgt-radares.xml https://nap.dgt.es/datex2/dgt/PredefinedLocationsPublication/radares/content.xml || rm -f work/dgt-radares.xml
+python3 build.py site work/*.geojsonseq $(ls work/dgt-radares.xml 2>/dev/null)

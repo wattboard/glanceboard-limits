@@ -11,8 +11,15 @@ Road speed-limit tiles for the Glanceboard app, built from OpenStreetMap once a 
 - `coverage.json`: zoom-11 areas that were built. `meta.json`: build date.
 - The GitHub Action rebuilds and publishes to GitHub Pages on the 2nd of each month.
 
+## Speed cameras
+
+Fixed cameras come from OpenStreetMap (`highway=speed_camera`) and from the DGT's open data
+(Punto de Acceso Nacional, "Radares fijos DGT", CC BY): its fixed cameras missing in OpenStreetMap
+(more than 150 m from one) and its average-speed sections, with the limit of the nearest road.
+
 ## Licence
 
 The data is © OpenStreetMap contributors and available under the
 [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).
-The tiles are a derived database under the same licence. The scripts are MIT.
+The tiles are a derived database under the same licence. Camera and section data also contains
+information from the Dirección General de Tráfico (DGT), reused under CC BY. The scripts are MIT.
