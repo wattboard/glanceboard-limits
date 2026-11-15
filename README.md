@@ -17,6 +17,9 @@ Fixed cameras come from OpenStreetMap (`highway=speed_camera`) and from the DGT'
 (Punto de Acceso Nacional, "Radares fijos DGT", CC BY): its fixed cameras missing in OpenStreetMap
 (more than 150 m from one) and its average-speed sections, with the limit of the nearest road.
 
+Solid-line cameras (`"l": [[lat, lon, dir]]`): the start camera of each stretch the DGT watches for
+lane changes across a solid line, tagged in OpenStreetMap as an ALPR camera described as such.
+
 ## Licence
 
 The data is © OpenStreetMap contributors and available under the

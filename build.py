@@ -10,6 +10,8 @@ Output (in ./site):
                    camera faces traffic from (-1 = not tagged). "c" is left out when there are none.
                    "s": [[lat1, lon1, lat2, lon2, kmh], ...] average-speed sections (DGT), in the tiles
                    of both ends; from start (lat1, lon1) to end, in the direction of traffic (DATEX "from" → "to"); kmh 0 = unknown.
+                   "l": [[lat, lon, dir], ...] solid-line cameras (start of the watched stretch), dir = heading
+                   of the traffic watched (-1 = not tagged).
   coverage.json    {"z": 9, "t": ["x/y", ...]}: zoom-11 areas built. Inside them a missing
                    tile means "no limits known here"; outside, the app asks another source.
   meta.json        when the data was built.
@@ -124,8 +126,18 @@ def direction(raw):
         return -1
 
 
-def read_cameras(path, cameras):
-    """Adds the speed cameras of one export to cameras[(x, y)]."""
+def is_solid_line_start(tags):
+    """The first camera of a solid-line watch (DGT, Madrid since 2025): two plate readers, at the
+    start and at the end of a stretch where changing lanes is forbidden. Tagged in OpenStreetMap as
+    an ALPR traffic camera whose description says so; only the start one is warned of."""
+    if tags.get("surveillance:type") != "ALPR":
+        return False
+    text = " ".join(str(tags.get(k, "")) for k in ("description", "note", "name")).lower()
+    return "nea continua" in text and "inicio" in text
+
+
+def read_cameras(path, cameras, lines=None):
+    """Adds the speed cameras of one export to cameras[(x, y)], and solid-line cameras to lines."""
     count = 0
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -137,6 +149,10 @@ def read_cameras(path, cameras):
             if geom.get("type") != "Point":
                 continue
             tags = feature.get("properties") or {}
+            if lines is not None and is_solid_line_start(tags):
+                lon, lat = geom["coordinates"]
+                lines[tile(lat, lon)].append([int(round(lat * 1e5)), int(round(lon * 1e5)), direction(tags.get("direction"))])
+                continue
             if tags.get("highway") != "speed_camera":
                 continue
             lon, lat = geom["coordinates"]
@@ -208,6 +224,7 @@ def main():
     out = sys.argv[1]
     tiles = defaultdict(list)   # (x, y) -> list of [kmh, points]
     cameras = defaultdict(list)  # (x, y) -> list of [lat, lon, kmh, dir]
+    lines = defaultdict(list)    # (x, y) -> list of [lat, lon, dir] (solid-line cameras)
     ways = 0
     inferred = 0
     camera_count = 0
@@ -217,7 +234,7 @@ def main():
             dgt = read_dgt(path)
             continue
         if os.path.basename(path).endswith("-cameras.geojsonseq"):
-            camera_count += read_cameras(path, cameras)
+            camera_count += read_cameras(path, cameras, lines)
             continue
         country = COUNTRIES.get(os.path.basename(path).split(".")[0])
         with open(path, encoding="utf-8") as f:
@@ -283,7 +300,7 @@ def main():
     cover = set()
     total = 0
     built = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
-    for (x, y) in set(tiles) | set(cameras) | set(sections):
+    for (x, y) in set(tiles) | set(cameras) | set(sections) | set(lines):
         entries = tiles.get((x, y), [])
         enc = []
         for limit, run in entries:
@@ -301,6 +318,8 @@ def main():
             body["c"] = cameras[(x, y)]
         if sections.get((x, y)):
             body["s"] = sections[(x, y)]
+        if lines.get((x, y)):
+            body["l"] = lines[(x, y)]
         data = json.dumps(body, separators=(",", ":"))
         total += len(data)
         with open(os.path.join(d, f"{y}.json"), "w") as f:
@@ -313,7 +332,7 @@ def main():
     with open(os.path.join(out, "meta.json"), "w") as f:
         json.dump({"v": 1, "z": Z, "built": built}, f)
     shutil.copy(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), out)
-    print(f"{ways} ways ({inferred} with the urban default), {camera_count} cameras, {len(set(tiles) | set(cameras) | set(sections))} tiles, {total / 1e6:.1f} MB, {len(cover)} coverage areas")
+    print(f"{ways} ways ({inferred} with the urban default), {camera_count} cameras, {sum(map(len, lines.values()))} solid-line cameras, {len(set(tiles) | set(cameras) | set(sections))} tiles, {total / 1e6:.1f} MB, {len(cover)} coverage areas")
 
 
 if __name__ == "__main__":
