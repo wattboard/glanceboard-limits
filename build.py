@@ -91,16 +91,36 @@ def lanes_each_way(tags):
     return lanes if tags.get("oneway") in ("yes", "1", "-1") else lanes // 2
 
 
+# Street names that only exist inside towns (Spanish, Catalan, Galician, Basque, Portuguese).
+URBAN_PREFIXES = ("calle ", "avenida ", "paseo ", "plaza ", "ronda ", "travesía ", "glorieta ", "bulevar ",
+                  "carrer ", "avinguda ", "passeig ", "plaça ", "rúa ", "rua ", "travessa ", "praça ", "largo ")
+URBAN_SUFFIXES = (" kalea", " etorbidea", " pasealekua", " plaza")
+
+
+def is_urban_street(tags):
+    """A town street by its name, with no road number (a numbered road may run through open country)."""
+    if tags.get("ref"):
+        return False
+    name = str(tags.get("name", "")).strip().lower()
+    return bool(name) and (name.startswith(URBAN_PREFIXES) or name.endswith(URBAN_SUFFIXES))
+
+
 def default_limit(tags, country):
     """The general limit of an urban street that has none tagged (most residential streets in OSM).
 
     Spain (since 2021): 20 on single-level streets, 30 with one lane each way, 50 with two or more.
-    Portugal: 50 in towns, 20 in shared zones. Other roads are left out: they may be rural.
+    Portugal: 50 in towns, 20 in shared zones. Tertiary and unclassified roads get it too when
+    their name is a town street's (most streets of business parks and new districts are tagged so,
+    with no limit: user, 16-nov, leaving a shopping centre in Rivas). Other roads are left out:
+    they may be rural.
     """
     road = tags.get("highway")
     if road == "living_street":
         return 20 if country in ("ES", "PT") else None
-    if road != "residential":
+    if road in ("tertiary", "unclassified"):
+        if not is_urban_street(tags):
+            return None
+    elif road != "residential":
         return None
     if country == "ES":
         return 50 if lanes_each_way(tags) >= 2 else 30
