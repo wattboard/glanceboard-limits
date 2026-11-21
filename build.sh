@@ -14,8 +14,13 @@ for c in $(grep -v '^#' countries.txt); do
   osmium tags-filter -O -o "work/$name-cameras.osm.pbf" "work/$name.osm.pbf" n/highway=speed_camera n/surveillance:type=ALPR
   osmium export -O -f geojsonseq --geometry-types=point \
     -o "work/$name-cameras.geojsonseq" "work/$name-cameras.osm.pbf"
+  # Charging stations (nodes and areas), for the trip planner's fast chargers.
+  osmium tags-filter -O -o "work/$name-chargers.osm.pbf" "work/$name.osm.pbf" nwr/amenity=charging_station
+  osmium export -O -f geojsonseq --geometry-types=point,polygon \
+    -o "work/$name-chargers.geojsonseq" "work/$name-chargers.osm.pbf"
 done
 # Official fixed cameras and average-speed sections from the DGT (open data, CC BY, Spain except
 # the Basque Country and Catalonia). Optional: the build goes on without it.
 curl -sfL -m 120 -o work/dgt-radares.xml https://nap.dgt.es/datex2/dgt/PredefinedLocationsPublication/radares/content.xml || rm -f work/dgt-radares.xml
-python3 build.py site work/*.geojsonseq $(ls work/dgt-radares.xml 2>/dev/null)
+python3 build.py site $(ls work/*.geojsonseq | grep -v -- -chargers) $(ls work/dgt-radares.xml 2>/dev/null)
+python3 chargers.py site/chargers.json work/*-chargers.geojsonseq

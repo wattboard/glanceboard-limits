@@ -21,6 +21,12 @@ Fixed cameras come from OpenStreetMap (`highway=speed_camera`) and from the DGT'
 Solid-line cameras (`"l": [[lat, lon, dir]]`): the start camera of each stretch the DGT watches for
 lane changes across a solid line, tagged in OpenStreetMap as an ALPR camera described as such.
 
+## Fast chargers
+
+`chargers.json` (for the app's trip planner): `{"built": "...", "c": [[lat, lon, kW, stalls, flags, name]]}`,
+coordinates in 1e-5 degrees, from `amenity=charging_station` with DC fast charging (40 kW or more;
+a CCS, CHAdeMO or Supercharger socket with no power tagged is taken as 50 or 150 kW). `flags` 1: Tesla Supercharger.
+
 ## Licence
 
 The data is © OpenStreetMap contributors and available under the
